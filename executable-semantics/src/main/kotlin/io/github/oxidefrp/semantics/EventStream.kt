@@ -129,19 +129,115 @@ fun <A> EventStream<A>.mergeWith(
     )
 }
 
-//fun <A> EventStream<A>.hold(initialValue: A): Signal<Cell<A>> =
-//    TODO()
+fun <A, B, C> mergeOccurrences(
+    occurrencesA: Sequence<EventOccurrence<A>>,
+    occurrencesB: Sequence<EventOccurrence<B>>,
+    transformA: (EventOccurrence<A>) -> C,
+    transformB: (EventOccurrence<B>) -> C,
+    combine: (EventOccurrence<A>, EventOccurrence<B>) -> C,
+): Sequence<EventOccurrence<C>> {
+    val (head1, tail1) = occurrencesA.cutOff()
+        ?: return occurrencesB.map { occ -> occ.map { transformB(occ) } }
+
+    val (head2, tail2) = occurrencesB.cutOff()
+        ?: return occurrencesA.map { occ -> occ.map { transformA(occ) } }
+
+    return if (head1.time == head2.time) {
+        val combinedOccurrence = EventOccurrence(
+            head1.time,
+            event = combine(
+                head1,
+                head2,
+            ),
+        )
+
+        sequenceCons(
+            head = combinedOccurrence,
+            tail = {
+                mergeOccurrences(
+                    occurrencesA = tail1,
+                    occurrencesB = tail2,
+                    transformA = transformA,
+                    transformB = transformB,
+                    combine = combine,
+                )
+            },
+        )
+    } else if (head1.time < head2.time) {
+        sequenceCons(
+            head = head1.map { transformA(head1) },
+            tail = {
+                mergeOccurrences(
+                    occurrencesA = tail1,
+                    occurrencesB = occurrencesB,
+                    transformA = transformA,
+                    transformB = transformB,
+                    combine = combine,
+                )
+            },
+        )
+    } else {
+        assert(head1.time > head2.time)
+
+        sequenceCons(
+            head = head2.map { transformB(head2) },
+            tail = {
+                mergeOccurrences(
+                    occurrencesA = occurrencesA,
+                    occurrencesB = tail2,
+                    transformA = transformA,
+                    transformB = transformB,
+                    combine = combine,
+                )
+            },
+        )
+    }
+}
+
+fun <A> EventStream<A>.hold(initialValue: A): Signal<Cell<A>> =
+    object : Signal<Cell<A>>() {
+        override fun at(t: Time): Cell<A> {
+            fun findCell(
+                oldValue: A,
+                newValuesOccurrences: Sequence<EventOccurrence<A>>,
+            ): Cell<A> {
+                val (head, tail) = newValuesOccurrences.cutOff() ?: return Cell(
+                    initialValue = oldValue,
+                    newValues = EventStream(
+                        occurrences = newValuesOccurrences,
+                    ),
+                )
+
+                if (head.time >= t) return Cell(
+                    initialValue = oldValue,
+                    newValues = EventStream(
+                        occurrences = newValuesOccurrences,
+                    ),
+                )
+
+                return findCell(
+                    oldValue = head.event,
+                    newValuesOccurrences = tail,
+                )
+            }
+
+            return findCell(
+                oldValue = initialValue,
+                newValuesOccurrences = occurrences,
+            )
+        }
+    }
 
 // Lazily construct a sequence from head and tail
 // Although we use yield-based imperative sequence builder here, this is
 // semantically equivalent to the classic FP list cons-constructor.
-private fun <T> sequenceCons(
+fun <T> sequenceCons(
     head: T,
-    buildTail: () -> Sequence<T>,
+    tail: () -> Sequence<T>,
 ): Sequence<T> =
     sequence {
         yield(head)
-        yieldAll(buildTail())
+        yieldAll(tail())
     }
 
 data class CutSequence<out A>(
@@ -152,7 +248,7 @@ data class CutSequence<out A>(
 // Cut the head off the sequence and return a pair in the form (head, tail).
 // If the corner case when the list is empty, return null instead (which
 // corresponds to FP list nil).
-private fun <T> Sequence<T>.cutOff(): CutSequence<T>? =
+fun <T> Sequence<T>.cutOff(): CutSequence<T>? =
     firstOrNull()?.let {
         CutSequence(
             head = it,

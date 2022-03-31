@@ -352,8 +352,97 @@ class EventStreamTests {
     }
 
     @Test
-    @Ignore
-    fun testHold(): Unit = TODO()
+    fun testHold() {
+        val stepsInput = EventStream(
+            sequenceOf(
+                EventOccurrence(Time(t = 1.0), event = 10),
+                EventOccurrence(Time(t = 2.0), event = 20),
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ) + generateOccurrencesSequence(
+                t0 = 11.0,
+                seed = 40,
+                nextFunction = { it },
+            ),
+        )
+
+        val result = stepsInput.hold(0)
+
+        val resultAt1 = result.at(Time(t = 0.0))
+
+        assertEquals(
+            expected = 0,
+            actual = resultAt1.initialValue,
+        )
+
+        assertEquals(
+            expected = listOf(
+                EventOccurrence(Time(t = 1.0), event = 10),
+                EventOccurrence(Time(t = 2.0), event = 20),
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ),
+            actual = resultAt1.newValues.occurrences.take(3).toList(),
+        )
+
+        val resultAt2 = result.at(Time(t = 1.0))
+
+        assertEquals(
+            expected = 0,
+            actual = resultAt2.initialValue,
+        )
+
+        assertEquals(
+            expected = listOf(
+                EventOccurrence(Time(t = 1.0), event = 10),
+                EventOccurrence(Time(t = 2.0), event = 20),
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ),
+            actual = resultAt2.newValues.occurrences.take(3).toList(),
+        )
+
+        val resultAt3 = result.at(Time(t = 1.1))
+
+        assertEquals(
+            expected = 10,
+            actual = resultAt3.initialValue,
+        )
+
+        assertEquals(
+            expected = listOf(
+                EventOccurrence(Time(t = 2.0), event = 20),
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ),
+            actual = resultAt3.newValues.occurrences.take(2).toList(),
+        )
+
+        val resultAt4 = result.at(Time(t = 2.0))
+
+        assertEquals(
+            expected = 10,
+            actual = resultAt4.initialValue,
+        )
+
+        assertEquals(
+            expected = listOf(
+                EventOccurrence(Time(t = 2.0), event = 20),
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ),
+            actual = resultAt4.newValues.occurrences.take(2).toList(),
+        )
+
+        val resultAt5 = result.at(Time(t = 2.1))
+
+        assertEquals(
+            expected = 20,
+            actual = resultAt5.initialValue,
+        )
+
+        assertEquals(
+            expected = listOf(
+                EventOccurrence(Time(t = 3.0), event = 30),
+            ),
+            actual = resultAt5.newValues.occurrences.take(1).toList(),
+        )
+    }
 }
 
 // Build event stream in form [(1.0, 1), (2.0, 2), (3.0, 3), ...]
