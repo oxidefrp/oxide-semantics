@@ -69,7 +69,7 @@ abstract class Signal<out A> {
         }
     }
 
-    internal abstract fun at(t: Time): A
+    abstract fun at(t: Time): A
 
     fun <B> map(transform: (A) -> B): Signal<B> =
         object : Signal<B>() {
