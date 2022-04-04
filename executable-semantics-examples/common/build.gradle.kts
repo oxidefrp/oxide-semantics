@@ -2,11 +2,9 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm")
-    application
 }
 
 dependencies {
-    implementation(project(":executable-semantics-examples:common"))
     implementation(project(":executable-semantics"))
 }
 
